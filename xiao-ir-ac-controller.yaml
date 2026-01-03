@@ -62,12 +62,15 @@ remote_transmitter:
   id: default_ir_transmitter
   pin: GPIO3
   carrier_duty_percent: 50%
+  non_blocking: true      # silence the warning / explicit
+  rmt_symbols: 48         # half of the C3 TX RMT pool
 
 remote_receiver:
   id: default_ir_receiver
   pin:
     number: GPIO4
     inverted: true
+  rmt_symbols: 48         # uses RX pool; 48 is fine, but not strictly required
   dump: raw
 
 climate:
@@ -150,6 +153,7 @@ light:
     pin: GPIO7
     num_leds: 1
     chipset: ws2812
+    rmt_symbols: 48       # the other half of TX RMT pool
     name: "RGB Status Light"
     id: rgb_light
     default_transition_length: 0s
