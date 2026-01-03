@@ -8,7 +8,7 @@ esphome:
   friendly_name: Xiao-IR-AC-Controller
 
 esp32:
-  board: seeed_xiao_esp32c3   # Use seeed_xiao_esp32c3 if your board is the Seeed XIAO C3
+  board: seeed_xiao_esp32c3
   framework:
     type: arduino
 
@@ -19,9 +19,6 @@ external_components:
     components: [ ir_remote_base, panasonic ]
 
 globals:
-  - id: is_wifi_connected
-    type: bool
-    initial_value: 'false'
   - id: reset_press_time
     type: uint32_t
     initial_value: '0'
@@ -48,11 +45,6 @@ ota:
 wifi:
   ssid: "Harbour Point"
   password: "chiangmai"
-  on_connect:
-    - globals.set: {id: is_wifi_connected, value: 'true'}
-    - light.turn_on: rgb_light
-  on_disconnect:
-    - globals.set: {id: is_wifi_connected, value: 'false'}
   ap:
     password: "12345678"
 
@@ -62,25 +54,37 @@ remote_transmitter:
   id: default_ir_transmitter
   pin: GPIO3
   carrier_duty_percent: 50%
-  non_blocking: true      # silence the warning / explicit
-  rmt_symbols: 48         # half of the C3 TX RMT pool
+  non_blocking: true
+  # rmt_symbols: 96        # full TX RMT pool for IR
 
 remote_receiver:
   id: default_ir_receiver
   pin:
     number: GPIO4
     inverted: true
-  rmt_symbols: 48         # uses RX pool; 48 is fine, but not strictly required
+  #rmt_symbols: 48
   dump: raw
 
 climate:
   - platform: panasonic
     name: "Panasonic Air Conditioner"
     id: panasonic_ac
-    model: DKE                  # <-- change if your Panasonic model differs
+    model: DKE                  # change if your Panasonic model differs
     transmitter_id: default_ir_transmitter
     supports_cool: true
     supports_heat: false        # set true if your unit supports heat
+
+# Simple IR test button to verify IR output with a phone camera
+button:
+  - platform: template
+    name: "IR Test Burst"
+    on_press:
+      - remote_transmitter.transmit_raw:
+          carrier_frequency: 38000 Hz
+          code: [9000, -4500, 560, -560, 560, -560, 560, -1690]
+          repeat:
+            times: 5
+            wait_time: 10ms
 
 binary_sensor:
   - platform: gpio
@@ -146,27 +150,6 @@ switch:
   - platform: factory_reset
     id: factory_reset_switch
     name: "Factory Reset"
-
-light:
-  - platform: esp32_rmt_led_strip
-    rgb_order: GRB
-    pin: GPIO7
-    num_leds: 1
-    chipset: ws2812
-    rmt_symbols: 48       # the other half of TX RMT pool
-    name: "RGB Status Light"
-    id: rgb_light
-    default_transition_length: 0s
-    on_turn_on:
-      - light.control:
-          id: rgb_light
-          red: 1.0
-          green: 1.0
-          blue: 1.0
-          brightness: 0.7
-    effects:
-      - addressable_scan:
-      - addressable_rainbow:
 
 script:
   - id: vibe_short
@@ -239,23 +222,3 @@ script:
                             format: "Touch Action: No specific action defined for %d clicks."
                             args: ['id(touch_count)']
       - lambda: 'id(touch_count) = 0;'
-
-interval:
-  - id: blink_rgb_interval
-    interval: 500ms
-    then:
-      - if:
-          condition:
-            lambda: 'return !id(is_wifi_connected);'
-          then:
-            - lambda: |-
-                static bool s = false;
-                s = !s;
-                auto call = id(rgb_light).turn_on();
-                if (s) {
-                  call.set_rgb(0, 0, 1);
-                  call.set_brightness(0.5);
-                } else {
-                  call.set_rgb(0, 0, 0);
-                }
-                call.perform();
